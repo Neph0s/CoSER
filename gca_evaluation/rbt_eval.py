@@ -218,10 +218,10 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
             if character_profile != '':
                 involved_character_profiles[character] = character_profile
 
-        if args.no_reference:
+        if actor_model == 'groundtruth': 
             agent_conversations = []
             for m in circumstance['dialogues']:
-                agent_conversations.append({"role": m['character'], "content": m['message']})
+                agent_conversations.append({"role": m['character'], "content": m['character'] + ': ' + m['message'].strip(' ')})
         else:
             # Create agents for all roles (characters + NSP)
             for character in speaking_characters_w_env + [NSP]:    
@@ -444,7 +444,7 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
         reference = [ m if m['character'] == ENVIRONMENT else 
             {**m, 'message': remove_inner_thoughts(m['message'])} 
             for m in reference  ]
-
+        
         # Convert to readable string format for evaluation
         simulation_str = '\n\n'.join([m['content'].strip('\n') for m in simulation])
         reference_str = '\n\n'.join([f"{m['character']}: {m['message']}".strip('\n') for m in reference])

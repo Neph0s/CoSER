@@ -200,7 +200,9 @@ def remove_inner_thoughts(dialogue: str) -> str:
 	
 	cleaned_dialogue = re.sub(r'\n+', '\n', cleaned_dialogue)
 	
-	return cleaned_dialogue.strip()
+	cleaned_dialogue = cleaned_dialogue.strip()
+
+	return cleaned_dialogue
 
 def add_speaker_name(dialogue: str, speaker: str) -> str:
 	# Check if the dialogue already contains a speaker prefix at the beginning of any line
