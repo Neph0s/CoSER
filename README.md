@@ -30,7 +30,12 @@ Install necessary dependencies via:
 
 ```bash
 pip install -r requirements.txt
+
+python
+import nltk
+nltk.download('punkt_tab')
 ```
+
 
 Setup your api_key and base_url for LLMs, in config.json. 
 

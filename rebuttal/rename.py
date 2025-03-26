@@ -32,10 +32,10 @@ for actor_model in actor_models:
 
     # 写入新的simulation_path
     with open(new_simulation_path, 'w') as f:
-        json.dump(simulation_data, f, ensure_ascii=False)
+        json.dump(simulation_data, f, indent=2, ensure_ascii=False)
 
     # 写入新的evaluation_path
     with open(new_evaluation_path, 'w') as f:
         evaluation_data['scores'] = evaluation_data.pop('avg_scores')
         evaluation_data["cases"] = evaluation_data.pop('results_by_case')
-        json.dump(evaluation_data, f, ensure_ascii=False)
+        json.dump(evaluation_data, f, indent=2, ensure_ascii=False)

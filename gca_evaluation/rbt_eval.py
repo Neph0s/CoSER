@@ -101,6 +101,30 @@ parser.add_argument(
     help='Number of parallel workers (default: 1)'
 )
 
+parser.add_argument(
+    '--no_length_penalty',
+    default=False,
+    action='store_true',
+)
+
+parser.add_argument(
+    '--no_rubric',
+    default=False,
+    action='store_true',
+)
+
+parser.add_argument(
+    '--no_reference',
+    default=False,
+    action='store_true',
+)
+
+parser.add_argument(
+    '--no_dim_sep',
+    default=False,
+    action='store_true',
+)
+
 # Parse arguments
 args = parser.parse_args()
 
@@ -147,7 +171,7 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
     simulation_path = f'exp/simulation/{test_file.split("/")[-1].replace(".json", "")}_{actor_setting}.json'
 
     logger.info(f'Conducting GCA Simulation for {actor_setting} on {test_file}\n\nThe results will be saved to {simulation_path}')
-
+    
     # Return cached results if available 
     if os.path.exists(simulation_path) and not args.regenerate:
         return json.load(open(simulation_path, 'r'))
@@ -168,6 +192,7 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
         if retrieval:
             book_database = json.load(open(f'{args.book_data}/{book_title}.json', 'r'))
 
+        
         # Identify the character lists
         plot_characters = [ c['name'] for c in plot['key_characters']] 
         speaking_characters_w_env = conversation['speaking_characters_w_env']
@@ -193,128 +218,133 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
             if character_profile != '':
                 involved_character_profiles[character] = character_profile
 
-        # Create agents for all roles (characters + NSP)
-        for character in speaking_characters_w_env + [NSP]:    
-            # Configure agent based on role type
-            if character == NSP:
-                # Next Speaker Predictor agent
-                system_prompt = get_nsp_prompt(speaking_characters_w_env, conversation['scenario'])
-                character_database = None
-            elif character == ENVIRONMENT:
-                # Environment description agent
-                system_prompt = get_environment_prompt(major_characters, conversation['scenario'])
-                character_database = None
-            else:
-                # Character role-playing agent
-                if retrieval and character in book_database['character_datasets']:
-                    # Set up retrieval database for character context
-                    character_database = book_database['character_datasets'][character]
-                    involved_plots = [_['i_p'] for _ in character_database['plots']] + \
-                                   [_['i_p'] for _ in character_database['conversations']] + \
-                                   [_['i_p'] for _ in character_database['utterances']]
-                    involved_plots = sorted(set(involved_plots))
-                    character_database['detailed_plots'] = [ book_database['plots'][i] for i in involved_plots ] 
-                else:
+        if args.no_reference:
+            agent_conversations = []
+            for m in circumstance['dialogues']:
+                agent_conversations.append({"role": m['character'], "content": m['message']})
+        else:
+            # Create agents for all roles (characters + NSP)
+            for character in speaking_characters_w_env + [NSP]:    
+                # Configure agent based on role type
+                if character == NSP:
+                    # Next Speaker Predictor agent
+                    system_prompt = get_nsp_prompt(speaking_characters_w_env, conversation['scenario'])
                     character_database = None
-
-                # Build character context from profile and plot
-                character_profile = involved_character_profiles.get(character, '')
-                if character in plot_characters:
-                    character_info = [c for c in plot['key_characters'] if c.get('name', '') == character][0]
-                character_profile = character_profile.strip(' \n')
-
-                # Get character motivation if specified
-                find_motivation = [ c.get('motivation', '') for c in conversation['key_characters'] if c.get('name', '') == character]
-                motivation = find_motivation[0] if find_motivation else ''
-
-                # Configure prompt based on model type
-                add_output_example = False if 'coser' in actor_model.lower() else True
-                system_prompt = get_character_prompt(
-                    book_title, character, character_profile, plot["summary"],
-                    conversation["scenario"], motivation, thoughtless=args.wo_thought,
-                    other_character_profiles=involved_character_profiles,
-                    exclude_plot_summary=True, fixed_template=True,
-                    add_output_example=add_output_example, add_rag=retrieval
-                )
-
-            # Select appropriate model for the agent
-            if character not in special_characters:
-                character_model = actor_model  # Character role-playing
-            elif character == ENVIRONMENT:
-                character_model = env_model    # Environment description
-            elif character == NSP:
-                character_model = nsp_model    # Next speaker prediction
-            else:
-                raise ValueError(f'Invalid character: {character}')
-
-            # Initialize the agent with its configuration
-            character_agent = Agent(
-                character_model, character, character_database,
-                system_prompt=system_prompt,
-                retrieval_target=retrieval if (retrieval and character not in special_characters) else None
-            )
-            character_agent.update('user', "===Conversation Start===\n\n")
-            character_agents[character] = character_agent
-
-        # Begin conversation simulation
-        max_rounds = 20
-        agent_conversations = []
-        current_speaker = speaking_characters_w_env[0]  # Start with first character
-        
-        # Main conversation loop
-        for i_round in range(max_rounds):
-            if current_speaker == "<END CHAT>":
-                break
-
-            logger.info(f'===Round {i_round}===\n')
-            
-            # Generate responses for current speaker and get next speaker prediction
-            for actor in [current_speaker, "NSP"]:
-                current_agent = character_agents[actor]
-                from utils import add_speaker_name
-                
-                # Use ground truth for early rounds if specified
-                if args.continue_from > i_round:
-                    if actor == current_speaker:
-                        response = conversation['dialogues'][i_round]['message']
-                    else:  # NSP
-                        response = conversation['dialogues'][i_round+1]['character'] if i_round < len(conversation['dialogues']) - 1 else '<END CHAT>'
+                elif character == ENVIRONMENT:
+                    # Environment description agent
+                    system_prompt = get_environment_prompt(major_characters, conversation['scenario'])
+                    character_database = None
                 else:
-                    response = current_agent.chat()
-
-                if actor == "NSP":
-                    # Process next speaker prediction
-                    next_actor = response.split(':')[0].strip() if ':' in response else response
-
-                    # Validate and set next speaker
-                    if next_actor == "<END CHAT>" and i_round >= 5:
-                        current_speaker = "<END CHAT>"
-                    elif next_actor in speaking_characters_w_env and next_actor != current_speaker:
-                        current_speaker = next_actor
+                    # Character role-playing agent
+                    if retrieval and character in book_database['character_datasets']:
+                        # Set up retrieval database for character context
+                        character_database = book_database['character_datasets'][character]
+                        involved_plots = [_['i_p'] for _ in character_database['plots']] + \
+                                    [_['i_p'] for _ in character_database['conversations']] + \
+                                    [_['i_p'] for _ in character_database['utterances']]
+                        involved_plots = sorted(set(involved_plots))
+                        character_database['detailed_plots'] = [ book_database['plots'][i] for i in involved_plots ] 
                     else:
-                        # Fallback to random selection if prediction is invalid
-                        candidates = set(major_characters + [ENVIRONMENT]) - {current_speaker}
-                        if not candidates:
-                            candidates = set(speaking_characters_w_env) - {current_speaker}
-                        candidates = list(candidates)
-                        current_speaker = random.choice(candidates)
-                    
-                    logger.info(f"Next speaker: {current_speaker} (Raw response: {response})")
-                    agent_conversations.append({"role": actor, "content": next_actor})
-                    current_agent.update('assistant', next_actor)
-                
-                else:
-                    # Process character/environment response
-                    response = add_speaker_name(response, actor)
-                    logger.info(f"{env_model if actor == ENVIRONMENT else actor_model}: {response}\n")
-                    agent_conversations.append({"role": actor, "content": response})
+                        character_database = None
 
-                    # Update conversation history for all agents
-                    for other_actor, other_agent in character_agents.items():
-                        if other_actor == actor:
-                            other_agent.update('assistant', response)
+                    # Build character context from profile and plot
+                    character_profile = involved_character_profiles.get(character, '')
+                    if character in plot_characters:
+                        character_info = [c for c in plot['key_characters'] if c.get('name', '') == character][0]
+                    character_profile = character_profile.strip(' \n')
+
+                    # Get character motivation if specified
+                    find_motivation = [ c.get('motivation', '') for c in conversation['key_characters'] if c.get('name', '') == character]
+                    motivation = find_motivation[0] if find_motivation else ''
+
+                    # Configure prompt based on model type
+                    add_output_example = False if 'coser' in actor_model.lower() else True
+                    system_prompt = get_character_prompt(
+                        book_title, character, character_profile, plot["summary"],
+                        conversation["scenario"], motivation, thoughtless=args.wo_thought,
+                        other_character_profiles=involved_character_profiles,
+                        exclude_plot_summary=True, fixed_template=True,
+                        add_output_example=add_output_example, add_rag=retrieval
+                    )
+
+                # Select appropriate model for the agent
+                if character not in special_characters:
+                    character_model = actor_model  # Character role-playing
+                elif character == ENVIRONMENT:
+                    character_model = env_model    # Environment description
+                elif character == NSP:
+                    character_model = nsp_model    # Next speaker prediction
+                else:
+                    raise ValueError(f'Invalid character: {character}')
+
+                # Initialize the agent with its configuration
+                character_agent = Agent(
+                    character_model, character, character_database,
+                    system_prompt=system_prompt,
+                    retrieval_target=retrieval if (retrieval and character not in special_characters) else None
+                )
+                character_agent.update('user', "===Conversation Start===\n\n")
+                character_agents[character] = character_agent
+
+            # Begin conversation simulation
+            max_rounds = 20
+            agent_conversations = []
+            current_speaker = speaking_characters_w_env[0]  # Start with first character
+            
+            # Main conversation loop
+            for i_round in range(max_rounds):
+                if current_speaker == "<END CHAT>":
+                    break
+
+                logger.info(f'===Round {i_round}===\n')
+                
+                # Generate responses for current speaker and get next speaker prediction
+                for actor in [current_speaker, "NSP"]:
+                    current_agent = character_agents[actor]
+                    from utils import add_speaker_name
+                    
+                    # Use ground truth for early rounds if specified
+                    if args.continue_from > i_round:
+                        if actor == current_speaker:
+                            response = conversation['dialogues'][i_round]['message']
+                        else:  # NSP
+                            response = conversation['dialogues'][i_round+1]['character'] if i_round < len(conversation['dialogues']) - 1 else '<END CHAT>'
+                    else:
+                        response = current_agent.chat()
+
+                    if actor == "NSP":
+                        # Process next speaker prediction
+                        next_actor = response.split(':')[0].strip() if ':' in response else response
+
+                        # Validate and set next speaker
+                        if next_actor == "<END CHAT>" and i_round >= 5:
+                            current_speaker = "<END CHAT>"
+                        elif next_actor in speaking_characters_w_env and next_actor != current_speaker:
+                            current_speaker = next_actor
                         else:
-                            other_agent.update('user', remove_inner_thoughts(response))
+                            # Fallback to random selection if prediction is invalid
+                            candidates = set(major_characters + [ENVIRONMENT]) - {current_speaker}
+                            if not candidates:
+                                candidates = set(speaking_characters_w_env) - {current_speaker}
+                            candidates = list(candidates)
+                            current_speaker = random.choice(candidates)
+                        
+                        logger.info(f"Next speaker: {current_speaker} (Raw response: {response})")
+                        agent_conversations.append({"role": actor, "content": next_actor})
+                        current_agent.update('assistant', next_actor)
+                    
+                    else:
+                        # Process character/environment response
+                        response = add_speaker_name(response, actor)
+                        logger.info(f"{env_model if actor == ENVIRONMENT else actor_model}: {response}\n")
+                        agent_conversations.append({"role": actor, "content": response})
+
+                        # Update conversation history for all agents
+                        for other_actor, other_agent in character_agents.items():
+                            if other_actor == actor:
+                                other_agent.update('assistant', response)
+                            else:
+                                other_agent.update('user', remove_inner_thoughts(response))
 
         # Store simulation results
         results.append({
@@ -325,6 +355,7 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
             'simulation': agent_conversations,
             'involved_character_profiles': involved_character_profiles
         })
+
 
     # Save simulation results
     os.makedirs(os.path.dirname(simulation_path), exist_ok=True)
@@ -366,7 +397,7 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
     # Configure paths based on model and retrieval settings
     actor_setting = f'{actor_model}{"_rag=" + retrieval if retrieval else ""}'
     simulation_path = f'exp/simulation/{test_file.split("/")[-1].replace(".json", "")}_{actor_setting}.json'
-    evaluation_path = simulation_path.replace('/simulation/', '/evaluation/')
+    evaluation_path = simulation_path.replace('/simulation/', '/evaluation/').replace('.json', f'{exp_name.replace("eval", "")}.json')
 
     logger.info(f'Evaluating GCA Simulation for {actor_setting} on {test_file}\n\nThe results will be saved to {evaluation_path}')
     
@@ -374,12 +405,19 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
     # if os.path.exists(evaluation_path) and not (args.regenerate or args.reevaluate):
     #     res = json.load(open(evaluation_path, 'r'))
     #     return res['scores'], res['cases']
+
+    if args.no_length_penalty:
+        orig_res = json.load(open(evaluation_path.replace('-no_length_penalty', ''), 'r'))
     
     # Load the simulation results
     simulation_results = json.load(open(simulation_path, 'r'))
 
     # Define evaluation dimensions
     dimensions = ['Storyline Consistency', 'Anthropomorphism', 'Character Fidelity', 'Storyline Quality']
+
+    if args.no_reference:
+        dimensions = ['Anthropomorphism', 'Character Fidelity', 'Storyline Quality']
+
     scores = { d: [] for d in dimensions + ['bleu', 'rouge_l'] }
     cases = {}
 
@@ -448,16 +486,32 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
         # Evaluate each dimension using LLM
         for dimension in dimensions:
             from prompts import critic_prompts
-            critic_prompt = critic_prompts['self-play-deduct-template'].replace('{book}', book_title).replace('{plot_summary}', circumstance['plot']['summary']).replace('{scenario}', scenario_str).replace('{character_profiles}', character_profile_str).replace('{original_conversation}', reference_str).replace('{major_characters}', ', '.join(major_characters)).replace('{additional_instructions}', additional_instructions).replace('{dimension_name}', dimension).replace('{dimension_brief}', critic_prompts['dimension_details'][dimension]['dimension_brief']).replace('{dimension_criteria}', critic_prompts['dimension_details'][dimension]['dimension_criteria'])
 
-            res = get_response_json([extract_json, parse_response], model=judge_model, messages=[{"role": "system", "content": critic_prompt}, {"role": "user", "content": simulation_str}])
+            if args.no_rubric:
+                critic_prompt = critic_prompts['self-play-deduct-template'].replace('{book}', book_title).replace('{plot_summary}', circumstance['plot']['summary']).replace('{scenario}', scenario_str).replace('{character_profiles}', character_profile_str).replace('{original_conversation}', reference_str).replace('{major_characters}', ', '.join(major_characters)).replace('{additional_instructions}', additional_instructions).replace('{dimension_name}', dimension).replace('{dimension_brief}', critic_prompts['dimension_details'][dimension]['dimension_brief']).replace('{dimension_criteria}', critic_prompts['dimension_details'][dimension]['dimension_brief'])
+            elif args.no_dim_sep:
+                critic_prompt = critic_prompts['self-play-deduct-template'].replace('{book}', book_title).replace('{plot_summary}', circumstance['plot']['summary']).replace('{scenario}', scenario_str).replace('{character_profiles}', character_profile_str).replace('{original_conversation}', reference_str).replace('{major_characters}', ', '.join(major_characters)).replace('{additional_instructions}', additional_instructions).replace('{dimension_name}', ', '.join(dimensions), 1).replace(', i.e., {dimension_brief}', '').replace('{dimension_criteria}', '\n\n'.join([ d + ':\n\n' +critic_prompts['dimension_details'][d]['dimension_criteria'] for d in dimensions])).replace('"{dimension_name}": {', '"Storyline Consistency": { // Make sure to output in four dimensions: Storyline Consistency, Anthropomorphism, Character Fidelity, and Storyline Quality. ')
+            elif args.no_reference:
+                critic_prompt = critic_prompts['self-play-deduct-template'].replace('* The original conversation from {book} in the same scenario as a reference.', '').replace('{book}', book_title).replace('{plot_summary}', circumstance['plot']['summary']).replace('{scenario}', scenario_str).replace('{character_profiles}', character_profile_str).replace('{original_conversation}', '').replace('## Original Conversation', '').replace('{major_characters}', ', '.join(major_characters)).replace('{additional_instructions}', additional_instructions).replace('{dimension_name}', dimension).replace('{dimension_brief}', critic_prompts['dimension_details'][dimension]['dimension_brief']).replace('{dimension_criteria}', critic_prompts['dimension_details'][dimension]['dimension_criteria'])
+            else:
+                critic_prompt = critic_prompts['self-play-deduct-template'].replace('{book}', book_title).replace('{plot_summary}', circumstance['plot']['summary']).replace('{scenario}', scenario_str).replace('{character_profiles}', character_profile_str).replace('{original_conversation}', reference_str).replace('{major_characters}', ', '.join(major_characters)).replace('{additional_instructions}', additional_instructions).replace('{dimension_name}', dimension).replace('{dimension_brief}', critic_prompts['dimension_details'][dimension]['dimension_brief']).replace('{dimension_criteria}', critic_prompts['dimension_details'][dimension]['dimension_criteria'])
+
+            if args.no_length_penalty:
+                res = {dimension: orig_res['cases'][actor_model][f'{book_title}-{i_p}-{i_c}']["critique"][dimension]}
+            elif not (args.no_dim_sep and dimension != dimensions[0]):
+                res = get_response_json([extract_json, parse_response], model=judge_model, messages=[{"role": "system", "content": critic_prompt}, {"role": "user", "content": simulation_str}])
             
             eval_result.update({dimension: res[dimension]})
             
             logger.info(json.dumps(res, ensure_ascii=False, indent=2)) 
             
-            # Calculate dimension score with length penalty
-            res[dimension]['score'] = max(0, min(100 - (sum([f['severity'] for f in res[dimension]['flaws'] if isinstance(f['severity'], int)]) - 0.3 * actor_rounds) * 5, 100) )
+            if args.no_length_penalty:
+                # Calculate dimension score with length penalty
+                res[dimension]['score'] = max(0, min(100 - (sum([f['severity'] for f in res[dimension]['flaws'] if isinstance(f['severity'], int)])) * 5, 100) )
+            else:
+                # Calculate dimension score with length penalty
+                res[dimension]['score'] = max(0, min(100 - (sum([f['severity'] for f in res[dimension]['flaws'] if isinstance(f['severity'], int)]) - 0.3 * actor_rounds) * 5, 100) )
+            
 
         # Calculate automated metrics
         bleu, rouge_l = calculate_bleu_rouge(reference[args.continue_from:], simulation[args.continue_from:])
@@ -492,34 +546,7 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
 
     return avg_scores, cases
 
-def generate(exp_args):
-        """Run simulation for given experiment args"""
-        actor_model, args, nth_exp = exp_args
-    
-        results = gca_simulation(
-            args.test_file,
-            actor_model, 
-            args.env_model,
-            args.nsp_model,
-            args.retrieval,
-            nth_exp
-        )
 
-        return results
-
-    def evaluate(exp_args):
-        """Run evaluation for given experiment args"""
-        actor_model, args, nth_exp = exp_args
-
-        scores, cases = gca_judging(
-            args.test_file,
-            actor_model,
-            args.retrieval,
-            args.judge_model,
-            nth_exp
-        )
-
-        return scores, cases
 
 if __name__ == "__main__":
 
@@ -533,7 +560,11 @@ if __name__ == "__main__":
     for nth_exp in nth_exps:
         # Configure experiment name and logging
         exp_name = 'eval' 
-        if args.continue_from > 0: exp_name += f'-continue_from={args.continue_from}'    
+        if args.continue_from > 0: exp_name += f'-continue_from={args.continue_from}' 
+        if args.no_length_penalty: exp_name += '-no_length_penalty'
+        if args.no_rubric: exp_name += '-no_rubric'
+        if args.no_dim_sep: exp_name += '-no_dim_sep'
+        if args.no_reference: exp_name += '-no_reference'
         if nth_exp > 0: exp_name += f'-repeat={nth_exp}'
         
         logger = setup_logger(__name__, f'{__file__.split(".")[0]}-{exp_name}.log')
@@ -544,9 +575,40 @@ if __name__ == "__main__":
 
         from concurrent.futures import ProcessPoolExecutor
         import functools
+
+        def generate(exp_args):
+            """Run simulation for given experiment args"""
+            actor_model, args, nth_exp = exp_args
+        
+            results = gca_simulation(
+                args.test_file,
+                actor_model, 
+                args.env_model,
+                args.nsp_model,
+                args.retrieval,
+                nth_exp
+            )
+
+            return results
+
+        def evaluate(exp_args):
+            """Run evaluation for given experiment args"""
+            actor_model, args, nth_exp = exp_args
+
+            scores, cases = gca_judging(
+                args.test_file,
+                actor_model,
+                args.retrieval,
+                args.judge_model,
+                nth_exp
+            )
+
+            return scores, cases
         
         # List of actor models to evaluate
         actor_models = ['llama3-1210-8epc', 'llama3p1-8b-0119', 'abab7-preview-chat', 'llama3p1-8b-instruct', 'gpt3.5', 'gpt-4o', 'claude35sonnet'] # you can modify the list to expand to multiple models
+        if args.no_reference:
+            actor_models += ['groundtruth']
 
         # Create experiment args for each actor model
         exp_args = [(actor_model, args, nth_exp) for actor_model in actor_models]

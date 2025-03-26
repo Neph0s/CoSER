@@ -7,3 +7,5 @@ langchain
 langchain_community
 sniffio
 six
+nltk
+rouge
