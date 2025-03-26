@@ -18,3 +18,5 @@ python gca_evaluation/rbt_eval.py --test_file data/test/id_set.json --judge_mode
 
 # no reference
 python gca_evaluation/rbt_eval.py --test_file data/test/id_set.json --judge_model gpt-4o --no_reference --num_workers 5
+
+python gca_evaluation/rbt_eval.py --test_file data/test/id_set.json --judge_model deepseek-r1 --no_reference --num_workers 5
