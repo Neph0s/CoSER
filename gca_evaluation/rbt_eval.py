@@ -402,9 +402,9 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
     logger.info(f'Evaluating GCA Simulation for {actor_setting} on {test_file}\n\nThe results will be saved to {evaluation_path}')
     
     # Return cached evaluation results if available
-    # if os.path.exists(evaluation_path) and not (args.regenerate or args.reevaluate):
-    #     res = json.load(open(evaluation_path, 'r'))
-    #     return res['scores'], res['cases']
+    if os.path.exists(evaluation_path) and not (args.regenerate or args.reevaluate):
+        res = json.load(open(evaluation_path, 'r'))
+        return res['scores'], res['cases']
 
     if args.no_length_penalty:
         orig_res = json.load(open(evaluation_path.replace('-no_length_penalty', ''), 'r'))
@@ -566,6 +566,7 @@ if __name__ == "__main__":
         if args.no_dim_sep: exp_name += '-no_dim_sep'
         if args.no_reference: exp_name += '-no_reference'
         if nth_exp > 0: exp_name += f'-repeat={nth_exp}'
+        if args.judge_model != 'gpt-4o': exp_name += f'-judge={args.judge_model}'
         
         logger = setup_logger(__name__, f'{__file__.split(".")[0]}-{exp_name}.log')
 
