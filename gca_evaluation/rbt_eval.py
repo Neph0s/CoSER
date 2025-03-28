@@ -611,6 +611,7 @@ if __name__ == "__main__":
         if args.no_reference:
             actor_models += ['groundtruth']
 
+
         # Create experiment args for each actor model
         exp_args = [(actor_model, args, nth_exp) for actor_model in actor_models]
 
