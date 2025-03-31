@@ -399,10 +399,12 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
     simulation_path = f'exp/simulation/{test_file.split("/")[-1].replace(".json", "")}_{actor_setting}.json'
     evaluation_path = simulation_path.replace('/simulation/', '/evaluation/').replace('.json', f'{exp_name.replace("eval", "")}.json')
 
+    evaluation_path = evaluation_path.replace('.json', '-hollm.json')
+
     logger.info(f'Evaluating GCA Simulation for {actor_setting} on {test_file}\n\nThe results will be saved to {evaluation_path}')
     
     # Return cached evaluation results if available
-    if os.path.exists(evaluation_path) and not (args.regenerate or args.reevaluate):
+    if False: #os.path.exists(evaluation_path) and not (args.regenerate or args.reevaluate):
         res = json.load(open(evaluation_path, 'r'))
         return res['scores'], res['cases']
 
@@ -422,9 +424,10 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
     cases = {}
 
     # Evaluate each simulation result
-    for result in simulation_results:
+    for i, result in enumerate(simulation_results[:30]):
         book_title, i_p, i_c, circumstance, simulation = result['book_title'], result['i_p'], result['i_c'], result['circumstance'], result['simulation'] 
-        
+
+
         # Verify indices match
         assert i_p == circumstance['plot']['i_p']
         assert i_c == circumstance['i_c']
@@ -432,14 +435,31 @@ def gca_judging(test_file, actor_model, retrieval, judge_model, nth_exp=0):
         logger.info(f'Book {book_title}')
 
         # Filter out NSP messages and clean up simulation/reference for comparison
-        simulation = result['simulation']
-        simulation = [m for m in simulation if m['role'] != NSP]
+        # simulation = result['simulation']
+        # simulation = [m for m in simulation if m['role'] != NSP]
         reference = circumstance['dialogues']
 
+
         # Remove inner thoughts for fair comparison
-        simulation = [ m if m['role'] == ENVIRONMENT else 
-            {**m, 'content': remove_inner_thoughts(m['content'])} 
-            for m in simulation  ]
+        # simulation = [ m if m['role'] == ENVIRONMENT else 
+            # {**m, 'content': remove_inner_thoughts(m['content'])} 
+            # for m in simulation  ]
+
+        # load the new simulation 
+
+        with open(f'exp/rbt/gpt-4o/{i}/Cleaned_Screenplay.json', 'r') as f:
+            new_simulation = json.load(f)
+        
+        cleaned_simulation = [] 
+        for m in new_simulation:
+            role, content = m.split(':', 1)
+            content = content.strip(' ')
+            if len(cleaned_simulation) > 0 and cleaned_simulation[-1]['role'] == role:
+                cleaned_simulation[-1]['content'] += '\n' + content
+            else:
+                cleaned_simulation.append({'role': role, 'content': m})
+        
+        simulation = cleaned_simulation
 
         reference = [ m if m['character'] == ENVIRONMENT else 
             {**m, 'message': remove_inner_thoughts(m['message'])} 
