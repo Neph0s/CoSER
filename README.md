@@ -40,7 +40,7 @@ We provide an example code (chat.py) that demonstrates how to chat with CoSER mo
 
 > Use [your thought] for thoughts, which others can't see. Use (your action) for actions, which others can see. 
 
-Here are two example cases of CoSER-8B:
+Here are two example cases of CoSER-8B (The complete dialogues are [here](https://github.com/Neph0s/CoSER/blob/main/data/chat_cases.json) ):
 
 ### Case 1: Book Character
 
