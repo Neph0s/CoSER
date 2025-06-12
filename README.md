@@ -142,7 +142,7 @@ Alternatively, you can use our provided dataset [CoSER-Books-Gutenberg](https://
 To construct a CoSER-style dataset from your own books, run:
 
 ```bash
-python data_construction/main.py --input data books_example.jsonl --num_workers 5
+python data_construction/main.py --input data books_example.jsonl --num_workers 5 --model gpt-4o
 ```
 
 **Arguments**
