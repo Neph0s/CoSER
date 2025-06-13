@@ -116,7 +116,7 @@ Here are two example cases of CoSER-8B (The complete dialogues are [here](https:
 
 ## Data 
 
-The complete dataset is available here: [CoSER Dataset](https://huggingface.co/datasets/Neph0s/CoSER). Besides, we provide some example data extracted from *The Harry Potter series* and *A Song of Ice and Fire series* in the data/final/ directory.
+The complete dataset is available here: [CoSER Dataset](https://huggingface.co/datasets/Neph0s/CoSER). Besides, we provide some example data extracted from *The Harry Potter series* and *A Song of Ice and Fire series* in the data/final/ directory. If you want to process [CoSER Dataset](https://huggingface.co/datasets/Neph0s/CoSER) via our code, please download the full/{book_name}.json files into CoSER/data/final. 
 
 ### Constructing Your Own Datasets
 
