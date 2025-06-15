@@ -904,6 +904,8 @@ def assemble(book):
         if isinstance(plot['conversation'], dict) and 'scenario' in plot['conversation']:
             plot['conversation'] = [plot['conversation']]
 
+        if plot['conversation'] is None:
+            continue 
         for conversation in plot['conversation']:
             # Prepare input for conversation enhancement
             input_conversation = {
