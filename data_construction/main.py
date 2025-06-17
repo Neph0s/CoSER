@@ -489,9 +489,11 @@ Please provide the output in the following JSON format:
                 # Extract original text for this plot
                 original_text = chunk[chunk.index(first_sentence):chunk.index(last_sentence) + len(last_sentence)]
                 
-                # If conversation is None, set it to an empty list
+                # If conversation or key_characters is None, set it to an empty list
                 if unprocessed_plot['conversation'] is None:
                     unprocessed_plot['conversation'] = []
+                if unprocessed_plot['key_characters'] is None:
+                    unprocessed_plot['key_characters'] = []
                     
                 # Create structured plot object
                 plot = {
