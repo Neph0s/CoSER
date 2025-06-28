@@ -283,7 +283,7 @@ def process(file):
                         else:
                             # Get character motivation
                             character_info = [char for char in conversation['key_characters'] 
-                                           if char.get('name', '')]
+                                           if char.get('name', '') == character]
 
                             if len(character_info) == 0: 
                                 motivation = ""
