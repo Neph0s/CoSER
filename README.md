@@ -176,6 +176,8 @@ We have provided [our SFT data in Sharegpt format](https://huggingface.co/datase
 
 To evaluate an LLM' role-playing performance via Given-Circumtance Acting (GCA) on [CoSER Test](https://github.com/Neph0s/CoSER/blob/main/data/test/test_set.json):
 
+Note that if you want to reproduce the evaluation results in CoSER, or compare new models with metrics reported in our paper, you should **use gpt-4o-24-08-06 as the judge model as in our paper**. Use gpt-4o of other versions will result in different evaluation scores.
+
 ```bash
 python gca_evaluation/main.py --test_file data/test/test_set.json --actor_model gpt-4o --judge_model gpt-4o
 ```
