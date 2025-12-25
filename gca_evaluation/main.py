@@ -310,6 +310,8 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
                         current_agent.update('assistant', response)
                     else:
                         current_agent.update('assistant', next_actor)
+                        # reinput system prompt 
+                        current_agent.update('user', current_agent.messages[0]['content'])
 
                 
                 else:
