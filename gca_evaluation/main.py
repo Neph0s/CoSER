@@ -8,7 +8,7 @@ import random
 import os
 from utils import get_environment_prompt, get_nsp_prompt, get_character_prompt
 from utils import get_response_json, extract_json
-from utils import remove_inner_thoughts, calculate_bleu_rouge
+from utils import remove_inner_thoughts, calculate_bleu_rouge, extract_nsp
 random.seed(42)
 
 logger = None
@@ -284,7 +284,7 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
 
                 if actor == "NSP":
                     # Process next speaker prediction
-                    next_actor = response.split(':')[0].strip() if ':' in response else response
+                    next_actor = extract_nsp(response).split(':')[0].strip() if ':' in response else response
 
                     # Validate and set next speaker
                     if next_actor == "<END CHAT>" and i_round >= 5:
@@ -301,11 +301,11 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
                     
                     logger.info(f"Next speaker: {current_speaker} (Raw response: {response})")
                     agent_conversations.append({"role": actor, "content": next_actor})
-                    current_agent.update('assistant', next_actor)
+                    current_agent.update('assistant', response)
                 
                 else:
                     # Process character/environment response
-                    response = add_speaker_name(response, actor)
+                    # response = add_speaker_name(response, actor)
                     logger.info(f"{env_model if actor == ENVIRONMENT else actor_model}: {response}\n")
                     agent_conversations.append({"role": actor, "content": response})
 
@@ -314,7 +314,7 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
                         if other_actor == actor:
                             other_agent.update('assistant', response)
                         else:
-                            other_agent.update('user', remove_inner_thoughts(response))
+                            other_agent.update('user', add_speaker_name(remove_inner_thoughts(response), actor))
 
         # Store simulation results
         results.append({

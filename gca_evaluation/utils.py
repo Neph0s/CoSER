@@ -199,6 +199,10 @@ def remove_inner_thoughts(dialogue: str) -> str:
 	cleaned_dialogue = '\n'.join(line.strip() for line in cleaned_dialogue.split('\n'))
 	
 	cleaned_dialogue = re.sub(r'\n+', '\n', cleaned_dialogue)
+
+	cleaned_dialogue = re.sub(r'\s*<\s*system[_\s]+think(?:ing)?\s*>.*?</\s*system[_\s]+think(?:ing)?\s*>\s*', '', cleaned_dialogue, flags=re.S).strip()
+	cleaned_dialogue = re.sub(r'\s*<\s*role[_\s]+think(?:ing)?\s*>.*?</\s*role[_\s]+think(?:ing)?\s*>\s*', '', cleaned_dialogue, flags=re.S).strip()
+	cleaned_dialogue = re.sub(r'\s*<\s*[_\s]+think(?:ing)?\s*>.*?</\s*[_\s]+think(?:ing)?\s*>\s*', '', cleaned_dialogue, flags=re.S).strip()
 	
 	return cleaned_dialogue.strip()
 
@@ -390,10 +394,30 @@ def get_nsp_prompt(all_characters, scenario):
 	prompt = f"""Your task is to predict the next speaker for a role-playing game. That is, you need to determine which character (or the {ENVIRONMENT}) might act next based on their previous interactions. The {ENVIRONMENT} is a special role that provides the environmental feedback. Choose a name from this list: {all_characters}. If it's unclear who should act next, output "random". If you believe the scene or conversation should conclude, output "<END CHAT>".
 
 ===The scenario is as follows===
-{scenario}"""
-	
+{scenario}
+
+===Output Format===
+You must structure your response as follows:
+1. Reasoning: Explain your thought process.
+2. Next Speaker: Select exactly one character name from the list: {all_characters}.
+"""
 	return prompt
 
+
+def extract_nsp(response):
+	pattern = r'(?:\*\*|#)?\s*Next\s+Speaker\s*(?:\*\*|#)?\s*(?:[:\-]|\bis\b)?\s*\*?([^\n\*]+)'
+	
+	matches = re.findall(pattern, response, re.IGNORECASE)
+	
+	if matches:
+		last_match = matches[-1]
+		
+		clean_name = last_match.strip().rstrip('.,!"\'').replace('*', '')
+		
+		if clean_name:
+			return clean_name
+			
+	return None
 
 from typing import Dict
 
