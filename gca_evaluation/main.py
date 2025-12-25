@@ -284,14 +284,18 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
 
                 if actor == "NSP":
                     # Process next speaker prediction
-                    next_actor = extract_nsp(response).split(':')[0].strip() if ':' in response else response
+                    next_actor = extract_nsp(response)
+                    if next_actor is None:
+                        next_actor = response.split(':')[0].strip() if ':' in response else response
 
+                    invalid_nsp = False
                     # Validate and set next speaker
                     if next_actor == "<END CHAT>" and i_round >= 5:
                         current_speaker = "<END CHAT>"
                     elif next_actor in speaking_characters_w_env and next_actor != current_speaker:
                         current_speaker = next_actor
                     else:
+                        invalid_nsp = True
                         # Fallback to random selection if prediction is invalid
                         candidates = set(major_characters + [ENVIRONMENT]) - {current_speaker}
                         if not candidates:
@@ -301,7 +305,12 @@ def gca_simulation(test_file, actor_model, env_model, nsp_model, retrieval, nth_
                     
                     logger.info(f"Next speaker: {current_speaker} (Raw response: {response})")
                     agent_conversations.append({"role": actor, "content": next_actor})
-                    current_agent.update('assistant', response)
+
+                    if not invalid_nsp:
+                        current_agent.update('assistant', response)
+                    else:
+                        current_agent.update('assistant', next_actor)
+
                 
                 else:
                     # Process character/environment response
