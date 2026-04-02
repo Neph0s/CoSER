@@ -1,3 +1,7 @@
+# 🔔 News
+ 
+- 2026-04-02 🎉 We introduce "*HER: Human-like Reasoning and Reinforcement Learning for LLM Role-playing"* [[arxiv](https://arxiv.org/abs/2601.21459)], a study on reasoning and reinforcement learning for LLM role-playing. It provides **HER dataset , which is a reasoning-augmented version of CoSER dataset**.
+
 # CoSER
 
 Official Code for "CoSER: Coordinating LLM-Based Persona Simulation of Established Roles"
